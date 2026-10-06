@@ -24,8 +24,11 @@ type Train = {
   status: string | null;
 };
 
+type Direction = "rambouillet-paris" | "paris-rambouillet";
+
 type LiveData = {
   updatedAt: string;
+  direction?: Direction;
   bus: Bus[];
   trains: Train[];
 };
@@ -64,10 +67,11 @@ export default function Home() {
   const [data, setData] = useState<LiveData | null>(null);
   const [error, setError] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
+  const [direction, setDirection] = useState<Direction>("rambouillet-paris");
 
-  async function load() {
+  async function load(selectedDirection: Direction) {
     try {
-      const response = await fetch("/api/live", { cache: "no-store" });
+      const response = await fetch(`/api/live?direction=${selectedDirection}`, { cache: "no-store" });
 
       if (!response.ok) throw new Error();
 
@@ -82,19 +86,20 @@ export default function Home() {
 
   useEffect(() => {
     setNow(new Date());
-    load();
+    setData(null);
+    load(direction);
 
     const clockTimer = window.setInterval(() => {
       setNow(new Date());
     }, 1000);
 
-    const apiTimer = window.setInterval(load, 180000);
+    const apiTimer = window.setInterval(() => load(direction), 180000);
 
     return () => {
       window.clearInterval(clockTimer);
       window.clearInterval(apiTimer);
     };
-  }, []);
+  }, [direction]);
 
   const visibleTrains =
     data?.trains.filter((train) => {
@@ -128,11 +133,26 @@ export default function Home() {
 
   return (
     <main className="screen">
+      <nav className="directionSwitch" aria-label="Sens du trajet">
+        <button
+          className={direction === "rambouillet-paris" ? "active" : ""}
+          onClick={() => setDirection("rambouillet-paris")}
+        >
+          Rambouillet → Paris
+        </button>
+        <button
+          className={direction === "paris-rambouillet" ? "active" : ""}
+          onClick={() => setDirection("paris-rambouillet")}
+        >
+          Paris → Rambouillet
+        </button>
+      </nav>
+
       <section className="rail">
         <header className="railHeader">
           <div>
             <div className="stationLabel">GARE DE</div>
-            <h1>Rambouillet</h1>
+            <h1>{direction === "rambouillet-paris" ? "Rambouillet" : "Paris Montparnasse"}</h1>
           </div>
 
           <div className="clock">
@@ -148,7 +168,7 @@ export default function Home() {
         <div className="railTitle">
           <div>
             <span>Prochains départs</span>
-            <strong>Paris Montparnasse</strong>
+            <strong>{direction === "rambouillet-paris" ? "Paris Montparnasse" : "Rambouillet"}</strong>
           </div>
 
           <div className="directionArrow">→</div>
@@ -194,11 +214,7 @@ export default function Home() {
               <div className="heroIdentity">
                 <div className="transportLine">
                   <span
-                    className={
-                      firstTrain.type === "N"
-                        ? "badge badgeN"
-                        : "badge badgeTer"
-                    }
+                    className="badge badgeTer"
                   >
                     {firstTrain.type}
                   </span>
@@ -254,11 +270,7 @@ export default function Home() {
 
                   <div className="followingLine">
                     <span
-                      className={
-                        train.type === "N"
-                          ? "badge smallBadge badgeN"
-                          : "badge smallBadge badgeTer"
-                      }
+                      className="badge smallBadge badgeTer"
                     >
                       {train.type}
                     </span>
@@ -305,14 +317,14 @@ export default function Home() {
 
           <div>
             <span className="stopLabel">ARRÊT</span>
-            <h2>Prunelliers</h2>
+            <h2>{direction === "rambouillet-paris" ? "Prunelliers" : "Gare de Rambouillet"}</h2>
           </div>
         </header>
 
         <div className="busDirection">
           <span>DIRECTION</span>
-          <strong>Marcel Dassault</strong>
-          <small>via Gare de Rambouillet</small>
+          <strong>{direction === "rambouillet-paris" ? "Marcel Dassault" : "Clairbois"}</strong>
+          <small>{direction === "rambouillet-paris" ? "via Gare de Rambouillet" : "via Prunelliers"}</small>
         </div>
 
         <div className="busContent">
@@ -406,14 +418,43 @@ export default function Home() {
           grid-template-columns:
             minmax(650px, 1.7fr)
             minmax(330px, 0.72fr);
-          gap: 18px;
+          grid-template-rows: auto 1fr;
+          gap: 12px 18px;
           background: #111820;
           font-family: Arial, Helvetica, sans-serif;
         }
 
+        .directionSwitch {
+          grid-column: 1 / -1;
+          display: flex;
+          justify-content: center;
+          gap: 4px;
+          padding: 4px;
+          background: #061a30;
+          border-radius: 6px;
+        }
+
+        .directionSwitch button {
+          flex: 1;
+          max-width: 360px;
+          padding: 11px 18px;
+          border: 0;
+          border-radius: 4px;
+          background: transparent;
+          color: rgba(255, 255, 255, 0.68);
+          font-size: 14px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .directionSwitch button.active {
+          background: #fff;
+          color: #071f3a;
+        }
+
         .rail,
         .bus {
-          min-height: calc(100vh - 40px);
+          min-height: calc(100vh - 96px);
           overflow: hidden;
         }
 
@@ -893,6 +934,18 @@ export default function Home() {
           .screen {
             padding: 0;
             display: block;
+          }
+
+          .directionSwitch {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            border-radius: 0;
+          }
+
+          .directionSwitch button {
+            padding: 13px 8px;
+            font-size: 12px;
           }
 
           .rail,
