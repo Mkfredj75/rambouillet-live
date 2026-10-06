@@ -63,7 +63,7 @@ async function getStopMonitoring(monitoringRef: string, lineRef: string): Promis
 }
 
 async function getEstimatedTimetable(lineRef: string): Promise<EstimatedJourney[]> {
-  const data = await prim("estimated-timetable", { LineRef: lineRef });
+  const data = await prim("estimated-timetable", { LineRef: lineRef === TER_LINE || lineRef === BUS_LINE ? lineRef : "ALL" });
   const frames = data?.Siri?.ServiceDelivery?.EstimatedTimetableDelivery?.[0]?.EstimatedJourneyVersionFrame ?? [];
   return frames.flatMap((frame: { EstimatedVehicleJourney?: EstimatedJourney[] }) =>
     frame.EstimatedVehicleJourney ?? []
@@ -128,7 +128,7 @@ function timetableTrains(journeys: EstimatedJourney[], isReturn: boolean) {
     .sort((a, b) =>
       new Date(a!.expectedDepartureTime!).getTime() - new Date(b!.expectedDepartureTime!).getTime()
     )
-    .slice(0, 8);
+    .slice(0, 3);
 }
 
 function timetableBus(journeys: EstimatedJourney[], isReturn: boolean) {
@@ -159,7 +159,7 @@ function timetableBus(journeys: EstimatedJourney[], isReturn: boolean) {
     .sort((a, b) =>
       new Date(a!.expectedDepartureTime!).getTime() - new Date(b!.expectedDepartureTime!).getTime()
     )
-    .slice(0, 8);
+    .slice(0, 3);
 }
 
 export async function GET(request: NextRequest) {
