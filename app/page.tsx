@@ -122,7 +122,7 @@ export default function Home() {
     }) ?? [];
 
   const firstTrain = visibleTrains[0];
-  const nextTrains = visibleTrains.slice(1, 5);
+  const nextTrains = visibleTrains.slice(1, 3);
 
   const firstTrainDelay = firstTrain
     ? delay(
