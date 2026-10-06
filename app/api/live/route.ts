@@ -1,12 +1,10 @@
-﻿import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-const PRIM_URL =
-  "https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring";
+const PRIM_URL = "https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring";
+const TER_LINE = "STIF:Line::C01744:";
+const BUS_LINE = "STIF:Line::C00183:";
 
-type SiriValue = {
-  value?: string;
-};
-
+type SiriValue = { value?: string };
 type StopVisit = {
   MonitoredVehicleJourney?: {
     LineRef?: SiriValue;
@@ -21,95 +19,73 @@ type StopVisit = {
       DepartureStatus?: string;
       DeparturePlatformName?: SiriValue;
     };
-    TrainNumbers?: {
-      TrainNumberRef?: SiriValue[];
-    };
+    TrainNumbers?: { TrainNumberRef?: SiriValue[] };
   };
 };
 
-async function getPrim(
-  monitoringRef: string,
-  lineRef?: string
-): Promise<StopVisit[]> {
+async function getPrim(monitoringRef: string, lineRef?: string): Promise<StopVisit[]> {
   const apiKey = process.env.PRIM_API_KEY;
+  if (!apiKey) throw new Error("PRIM_API_KEY manquant");
 
-  if (!apiKey) {
-    throw new Error("PRIM_API_KEY manquant");
-  }
-
-  const params = new URLSearchParams({
-    MonitoringRef: monitoringRef,
-  });
-
-  if (lineRef) {
-    params.set("LineRef", lineRef);
-  }
+  const params = new URLSearchParams({ MonitoringRef: monitoringRef });
+  if (lineRef) params.set("LineRef", lineRef);
 
   const response = await fetch(`${PRIM_URL}?${params.toString()}`, {
-    headers: {
-      apiKey,
-      Accept: "application/json",
-    },
+    headers: { apiKey, Accept: "application/json" },
     cache: "no-store",
   });
-
-  if (!response.ok) {
-    throw new Error(`Erreur PRIM ${response.status}`);
-  }
+  if (!response.ok) throw new Error(`Erreur PRIM ${response.status}`);
 
   const data = await response.json();
-
-  return (
-    data?.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0]
-      ?.MonitoredStopVisit ?? []
-  );
+  return data?.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0]?.MonitoredStopVisit ?? [];
 }
 
 function value(first?: SiriValue[]) {
   return first?.[0]?.value ?? null;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    /*
-     * BUS 5302
-     * Prunelliers -> Marcel Dassault
-     * Passe par Gare de Rambouillet
-     */
+    const direction = request.nextUrl.searchParams.get("direction") === "paris-rambouillet"
+      ? "paris-rambouillet"
+      : "rambouillet-paris";
+
+    const isReturn = direction === "paris-rambouillet";
+
+    // 5302 : Prunelliers -> Marcel Dassault (aller)
+    // 5302 : Gare de Rambouillet - Prud'homme -> Clairbois, via Prunelliers (retour)
     const busVisits = await getPrim(
-      "STIF:StopPoint:Q:31258:",
-      "STIF:Line::C00183:"
+      isReturn ? "STIF:StopPoint:Q:31265:" : "STIF:StopPoint:Q:31258:",
+      BUS_LINE
     );
 
+    const wantedBusDestination = isReturn ? "clairbois" : "marcel dassault";
     const bus = busVisits
       .map((visit) => {
         const journey = visit.MonitoredVehicleJourney;
         const call = journey?.MonitoredCall;
-
         return {
           line: "5302",
           stop: value(call?.StopPointName),
-          destination:
-            value(call?.DestinationDisplay) ??
-            value(journey?.DestinationName),
+          destination: value(call?.DestinationDisplay) ?? value(journey?.DestinationName),
           expectedDepartureTime: call?.ExpectedDepartureTime ?? null,
           aimedDepartureTime: call?.AimedDepartureTime ?? null,
           status: call?.DepartureStatus ?? null,
         };
       })
-      .filter((item) => item.expectedDepartureTime)
-      .sort(
-        (a, b) =>
-          new Date(a.expectedDepartureTime!).getTime() -
-          new Date(b.expectedDepartureTime!).getTime()
+      .filter((item) =>
+        item.expectedDepartureTime &&
+        item.destination?.toLowerCase().includes(wantedBusDestination)
+      )
+      .sort((a, b) =>
+        new Date(a.expectedDepartureTime!).getTime() -
+        new Date(b.expectedDepartureTime!).getTime()
       );
 
-    /*
-     * GARE DE RAMBOUILLET
-     * Ligne N + TER vers Paris-Montparnasse
-     */
+    // TER/Rémi uniquement. La ligne N est volontairement exclue partout.
     const trainVisits = await getPrim(
-      "STIF:StopArea:SP:427870:"
+      isReturn ? "STIF:StopArea:SP:43238:" : "STIF:StopArea:SP:427870:",
+      TER_LINE
     );
 
     const trains = trainVisits
@@ -117,22 +93,12 @@ export async function GET() {
         const journey = visit.MonitoredVehicleJourney;
         const call = journey?.MonitoredCall;
         const lineRef = journey?.LineRef?.value ?? null;
-
         return {
-          type:
-            lineRef === "STIF:Line::C01736:"
-              ? "N"
-              : lineRef === "STIF:Line::C01744:"
-              ? "TER"
-              : "TRAIN",
+          type: "TER",
           lineRef,
           stop: value(call?.StopPointName),
-          destination:
-            value(call?.DestinationDisplay) ??
-            value(journey?.DestinationName),
-          trainNumber:
-            value(journey?.TrainNumbers?.TrainNumberRef) ??
-            value(journey?.VehicleJourneyName),
+          destination: value(call?.DestinationDisplay) ?? value(journey?.DestinationName),
+          trainNumber: value(journey?.TrainNumbers?.TrainNumberRef) ?? value(journey?.VehicleJourneyName),
           mission: value(journey?.JourneyNote),
           expectedDepartureTime: call?.ExpectedDepartureTime ?? null,
           aimedDepartureTime: call?.AimedDepartureTime ?? null,
@@ -140,45 +106,24 @@ export async function GET() {
           status: call?.DepartureStatus ?? null,
         };
       })
-      .filter(
-        (train) =>
-          (
-            train.lineRef === "STIF:Line::C01736:" ||
-            train.lineRef === "STIF:Line::C01744:"
-          ) &&
-          train.destination
-            ?.toLowerCase()
-            .includes("paris montparnasse") &&
-          train.expectedDepartureTime
+      .filter((train) =>
+        train.lineRef === TER_LINE &&
+        train.expectedDepartureTime &&
+        (isReturn || train.destination?.toLowerCase().includes("paris montparnasse"))
       )
-      .sort(
-        (a, b) =>
-          new Date(a.expectedDepartureTime!).getTime() -
-          new Date(b.expectedDepartureTime!).getTime()
+      .sort((a, b) =>
+        new Date(a.expectedDepartureTime!).getTime() -
+        new Date(b.expectedDepartureTime!).getTime()
       );
 
     return NextResponse.json(
-      {
-        updatedAt: new Date().toISOString(),
-        bus,
-        trains,
-      },
-      {
-        headers: {
-          "Cache-Control": "no-store",
-        },
-      }
+      { updatedAt: new Date().toISOString(), direction, bus, trains },
+      { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
     console.error(error);
-
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Erreur inconnue",
-      },
+      { error: error instanceof Error ? error.message : "Erreur inconnue" },
       { status: 500 }
     );
   }
