@@ -637,8 +637,8 @@ export default function Home() {
         }
 
         .platformBlock {
-          width: 108px;
-          height: 108px;
+          width: 132px;
+          height: 132px;
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -656,9 +656,17 @@ export default function Home() {
         }
 
         .platformBlock strong {
-          margin-top: 1px;
-          font-size: 43px;
+          max-width: 112px;
+          margin-top: 2px;
+          overflow: hidden;
+          font-size: 54px;
           line-height: 1;
+          text-align: center;
+          white-space: nowrap;
+        }
+
+        .platformBlock strong.platformUnknown {
+          font-size: 22px;
         }
 
         .following {
@@ -960,7 +968,22 @@ export default function Home() {
           }
 
           .platformBlock {
-            justify-self: start;
+            width: 148px;
+            height: 148px;
+            justify-self: end;
+          }
+
+          .platformBlock span {
+            font-size: 12px;
+          }
+
+          .platformBlock strong {
+            max-width: 126px;
+            font-size: 66px;
+          }
+
+          .platformBlock strong.platformUnknown {
+            font-size: 24px;
           }
 
           .followingHeader,
