@@ -294,7 +294,7 @@ export default function Home() {
                   </div>
 
                   <div className="smallPlatform">
-                    {train.platform ?? "—"}
+                    {!train.platform || train.platform.toLowerCase() === "unknown" ? "…" : train.platform}
                   </div>
                 </div>
               );
