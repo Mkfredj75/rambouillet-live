@@ -237,7 +237,7 @@ export default function Home() {
 
               <div className="platformBlock">
                 <span>VOIE</span>
-                <strong>{firstTrain.platform ?? "—"}</strong>
+                <strong>{!firstTrain.platform || firstTrain.platform.toLowerCase() === "unknown" ? "…" : firstTrain.platform}</strong>
               </div>
             </div>
           </article>
